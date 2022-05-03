@@ -29,6 +29,7 @@ class MultiHeadAttention(nn.Module):
         self.w_k = nn.Linear(d_model, d_k*heads, bias=False)
         self.w_v = nn.Linear(d_model, d_v*heads, bias=False)
         self.w_o = nn.Linear(heads * d_v, d_model, bias=False)
+        self.norm = nn.LayerNorm(d_model)
     def attention(self, q, k, v):
         attn = torch.matmul(q / np.power(self.d_model, 0.5), k.transpose(2, 3))
         attn = nn.functional.softmax(attn, dim=-1)
@@ -37,6 +38,7 @@ class MultiHeadAttention(nn.Module):
     def forward(self, q, k, v):
         batch = q.size(0)
         t = q.size(1)
+        residual = q 
         q = self.w_q(q).view(batch, t, self.heads, self.d_k)
         k = self.w_k(k).view(batch, t, self.heads, self.d_k)
         v = self.w_v(v).view(batch, t, self.heads, self.d_v)
@@ -44,6 +46,8 @@ class MultiHeadAttention(nn.Module):
         output, attn = self.attention(q, k, v)
         output = output.transpose(1,2).contiguous().view(batch, t, -1)
         output = self.w_o(output)
+        output += residual
+        output = self.norm(output)
         return output, attn
 
 class FeedForward(nn.Module):
@@ -51,9 +55,13 @@ class FeedForward(nn.Module):
         super(FeedForward, self).__init__()
         self.fc1 = nn.Linear(d_model, d_inner)
         self.fc2 = nn.Linear(d_inner, d_model)
+        self.norm = nn.LayerNorm(d_model)
     def forward(self, x):
-        ffn = self.fc2(nn.functional.relu(self.fc1(x)))
-        return ffn
+        residual = x
+        output = self.fc2(nn.functional.relu(self.fc1(x)))
+        output += residual
+        output = self.norm(output)
+        return output
 
 class EncoderBlock(nn.Module):
     def __init__(self, )
