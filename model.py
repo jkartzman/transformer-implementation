@@ -4,7 +4,7 @@ import numpy as np
 
 class PositionalEncoding(nn.Module):
     def __init__(self, d, n_tokens):
-        super(PositionalEncoding, self).__init__()
+        super().__init__()
         self.register_buffer('pos_encoding_matrix', self.generate_positional_encoding_matrix(d, n_tokens))
     def generate_positional_encoding_matrix(self, d, n_tokens):
         matrix = []
@@ -20,7 +20,7 @@ class PositionalEncoding(nn.Module):
 
 class MultiHeadAttention(nn.Module):
     def __init__(self, d_model, d_k, d_v, heads):
-        super(MultiHeadAttention, self).__init__()
+        super().__init__()
         self.d_k = d_k
         self.heads = heads
         self.d_model = d_model
@@ -56,7 +56,7 @@ class MultiHeadAttention(nn.Module):
 
 class FeedForward(nn.Module):
     def __init__(self, d_model, d_inner):
-        super(FeedForward, self).__init__()
+        super().__init__()
         self.fc1 = nn.Linear(d_model, d_inner)
         self.fc2 = nn.Linear(d_inner, d_model)
         self.norm = nn.LayerNorm(d_model)
@@ -69,7 +69,7 @@ class FeedForward(nn.Module):
 
 class EncoderBlock(nn.Module):
     def __init__(self, d_model, d_inner, d_k, d_v, heads):
-        super(EncoderBlock, self).__init__()
+        super().__init__()
         self.attn = MultiHeadAttention(d_model, d_k, d_v, heads)
         self.ffn = FeedForward(d_model, d_inner)
     def forward(self, x, attn_mask=None):
@@ -79,7 +79,7 @@ class EncoderBlock(nn.Module):
 
 class DecoderBlock(nn.Module):
     def __init__(self, d_model, d_inner, d_k, d_v, heads):
-        super(DecoderBlock, self).__init__()
+        super().__init__()
         self.masked_attn = MultiHeadAttention(d_model, d_k, d_v, heads)
         self.encoder_attn = MultiHeadAttention(d_model, d_k, d_v, heads)
         self.ffn = FeedForward(d_model, d_inner)
@@ -89,7 +89,44 @@ class DecoderBlock(nn.Module):
         decoder_output = self.ffn(decoder_output)
         return decoder_output, masked_attn_weights, encoder_attn_weights
 
-class EncoderModel(nn.Module):
-    def __init__(self, )
-        super(EncoderModel, self).__init__()
+class Encoder(nn.Module):
+    def __init__(self, d_model, vocab_size, layers, heads, d_k, d_v, d_inner, num_tokens, padding_idx)
+        super().__init__()
+        self.d_model = d_model
+        self.emb = nn.Embedding(vocab_size, d_model)
+        self.pos_encoding = PositionalEncoding(d_model, num_tokens)
+        self.encoder_layers = nn.ModuleList([
+            EncoderBlock(d_model, d_inner, d_k, d_v, heads) for i in range(layers)
+        ])
+    def forward(self, input_seq, input_mask):
+        attn_outputs = []
+        embeddings = self.emb(input_seq)
+        scaled_emb = embeddings * np.power(self.d_model, 0.5)
+        encoding = self.pos_encoding(scaled_emb)
+        for layer in self.encoder_layers:
+            encoding, self_attn_output = layer(encoding, attn_mask=input_mask)
+            attn_outputs.append(self_attn_output)
+        return encoding, attn_outputs
+
+class Decoder(nn.Module):
+    def __init__(self, d_model, target_vocab_size, layers, heads, d_k, d_v, d_inner, num_tokens, padding_idx)
+        super().__init__()
+        self.d_model = d_model
+        self.emb = nn.Embedding(vocab_size, d_model)
+        self.pos_encoding = PositionalEncoding(d_model, num_tokens)
+        self.decoder_layers = nn.ModuleList([
+            DecoderBlock(d_model, d_inner, d_k, d_v, heads) for i in range(layers)
+        ])
+    def forward(self, target_seq, target_mask, encoder_output, encoder_attn_mask):
+        attn_outputs = []
+        encoder_attn_outputs = []
+        embeddings = self.emb(target_seq)
+        scaled_emb = embeddings * np.power(self.d_model, 0.5)
+        decoder_output = self.pos_encoding(scaled_emb)
+        for layer in self.decoder_layers:
+            decoder_output, self_attn_output, encoder_attn_output = layer(decoder_output, attn_mask=target_mask, encoder_attn_mask=encoder_attn_mask)
+            attn_outputs.append(self_attn_output)
+            encoder_attn_outputs.append(encoder_attn_output)
+        return encoding, attn_outputs, encoder_attn_outputs
+
 
