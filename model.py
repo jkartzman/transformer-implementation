@@ -30,12 +30,14 @@ class MultiHeadAttention(nn.Module):
         self.w_v = nn.Linear(d_model, d_v*heads, bias=False)
         self.w_o = nn.Linear(heads * d_v, d_model, bias=False)
         self.norm = nn.LayerNorm(d_model)
-    def attention(self, q, k, v):
+    def attention(self, q, k, v, mask=None):
         attn = torch.matmul(q / np.power(self.d_model, 0.5), k.transpose(2, 3))
+        if mask is not None:
+            attn = attn.masked_fill(mask==0, np.inf)
         attn = nn.functional.softmax(attn, dim=-1)
         output = torch.matmul(attn, v)
         return output, attn
-    def forward(self, q, k, v):
+    def forward(self, q, k, v, mask=None):
         batch = q.size(0)
         t = q.size(1)
         residual = q 
@@ -43,7 +45,9 @@ class MultiHeadAttention(nn.Module):
         k = self.w_k(k).view(batch, t, self.heads, self.d_k)
         v = self.w_v(v).view(batch, t, self.heads, self.d_v)
         q, k, v = q.transpose(1, 2), k.transpose(1, 2), v.transpose(1, 2)
-        output, attn = self.attention(q, k, v)
+        if mask is not None:
+            mask = mask.unsqueeze(1)
+        output, attn = self.attention(q, k, v, mask=mask)
         output = output.transpose(1,2).contiguous().view(batch, t, -1)
         output = self.w_o(output)
         output += residual
@@ -64,6 +68,28 @@ class FeedForward(nn.Module):
         return output
 
 class EncoderBlock(nn.Module):
-    def __init__(self, )
+    def __init__(self, d_model, d_inner, d_k, d_v, heads):
+        super(EncoderBlock, self).__init__()
+        self.attn = MultiHeadAttention(d_model, d_k, d_v, heads)
+        self.ffn = FeedForward(d_model, d_inner)
+    def forward(self, x, attn_mask=None):
+        output, attn_weights = self.attn(x, x, x, mask=attn_mask)
+        output = self.ffn(output)
+        return output, attn_weights
 
+class DecoderBlock(nn.Module):
+    def __init__(self, d_model, d_inner, d_k, d_v, heads):
+        super(DecoderBlock, self).__init__()
+        self.masked_attn = MultiHeadAttention(d_model, d_k, d_v, heads)
+        self.encoder_attn = MultiHeadAttention(d_model, d_k, d_v, heads)
+        self.ffn = FeedForward(d_model, d_inner)
+    def forward(self, decoder_input, encoder_output, attn_mask=None, encoder_attn_mask=None):
+        decoder_output, masked_attn_weights = self.masked_attn(decoder_input, decoder_input, decoder_input, mask=attn_mask)
+        decoder_output, encoder_attn_weights = self.encoder_attn(decoder_output, encoder_output, encoder_output, mask=encoder_attn_mask)
+        decoder_output = self.ffn(decoder_output)
+        return decoder_output, masked_attn_weights, encoder_attn_weights
+
+class EncoderModel(nn.Module):
+    def __init__(self, )
+        super(EncoderModel, self).__init__()
 
