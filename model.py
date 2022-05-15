@@ -106,7 +106,7 @@ class Transformer(nn.Module):
         super(Transformer, self).__init__()
         self.encoder = Encoder(d_model, num_encoder_layers, heads, d_inner)
         self.decoder = Decoder(d_model, num_encoder_layers, heads, d_inner)
-        self.generator = nn.Linear(d_model, tgt_vocab_size)
+        self.fc_out = nn.Linear(d_model, tgt_vocab_size)
         self.src_tok_emb = TokenEmbedding(src_vocab_size, d_model)
         self.tgt_tok_emb = TokenEmbedding(tgt_vocab_size, d_model)
         self.positional_encoding = PositionalEncoding(d_model, dropout=dropout)
@@ -123,7 +123,8 @@ class Transformer(nn.Module):
         outs = self.decoder(tgt_emb, memory, trg_mask=tgt_mask,
                                         trg_key_padding_mask=tgt_padding_mask, 
                                         enc_key_padding_mask=memory_key_padding_mask)
-        return self.generator(outs)
+        logits = self.fc_out(outs)
+        return logits
 
     def encode(self, src, src_mask):
         output = self.encoder(self.positional_encoding(
@@ -134,3 +135,4 @@ class Transformer(nn.Module):
         output = self.decoder(self.positional_encoding(
                           self.tgt_tok_emb(tgt)), memory, tgt_mask)
         return output
+
